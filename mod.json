@@ -1,0 +1,14 @@
+{
+	"geode": "4.5.0",
+	"gd": {
+		"win": "2.2074",
+		"mac": "2.2074",
+		"ios": "2.2074"
+	},
+	"id": "therisinglegend.shop_sort",
+	"name": "Shop Sorting",
+	"version": "v1.0.0",
+	"developer": "TheRisingLegend",
+	"description": "Adds sorting options to the shops",
+	"repository": "https://github.com/TheRisingLegend/gd-shop-sorting"
+}
