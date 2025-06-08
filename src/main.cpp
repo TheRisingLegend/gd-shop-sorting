@@ -178,33 +178,35 @@ class $modify(SortingShopLayer, GJShopLayer) {
         // This mess is to traverse the node tree
         auto pages_temp = this->getChildByIDRecursive("shop-page-container")->getChildren();  // ListButtonPage
         int originalIndex = 0;                                                                // to be able to sort back to default order
-        for (auto page : CCArrayExt<CCNode*>(pages_temp)) {
-            auto listPage = typeinfo_cast<ListButtonPage*>(page);
-            if (!listPage) continue;
+        for (auto t_page : CCArrayExt<CCNode*>(pages_temp)) {
+            ListButtonPage* page = typeinfo_cast<ListButtonPage*>(t_page);
+            if (!page) continue;
 
-            cocos2d::CCMenu* ccmenu = static_cast<cocos2d::CCMenu*>(page->getChildren()->objectAtIndex(0));
+            cocos2d::CCMenu* ccmenu = typeinfo_cast<cocos2d::CCMenu*>(page->getChildren()->objectAtIndex(0));
+            if (!ccmenu) continue;
             m_fields->m_pages.push_back(ccmenu);
 
             auto pageItems = ccmenu->getChildren();
-            for (auto itemNode : CCArrayExt<CCNode*>(pageItems)) {
-                if (auto item = typeinfo_cast<CCMenuItemSpriteExtra*>(itemNode)) {
-                    // Get the item type
-                    GJItemIcon* icon = typeinfo_cast<GJItemIcon*>(item->getChildren()->objectAtIndex(0));  // this should be fine, can't think of any reason anyone would add another child here
-                    int unlockType = static_cast<int>(icon->m_unlockType);
+            for (auto t_item : CCArrayExt<CCNode*>(pageItems)) {
+                // Get the item type
+                CCMenuItemSpriteExtra* item = typeinfo_cast<CCMenuItemSpriteExtra*>(t_item);
+                if (!item) continue;
+                GJItemIcon* icon = typeinfo_cast<GJItemIcon*>(item->getChildren()->objectAtIndex(0));  // this should be fine, can't think of any reason anyone would add another child here
+                int unlockType = static_cast<int>(icon->m_unlockType);
 
-                    // Get the price if the item hasn't been purchased yet
-                    int price = -1;
-                    for (auto child : CCArrayExt<CCNode*>(icon->getChildren())) {
-                        if (auto label = typeinfo_cast<CCLabelBMFont*>(child)) {
-                            std::string labelText = label->getString();
-                            labelText.erase(std::remove(labelText.begin(), labelText.end(), ','), labelText.end());
-                            price = std::stoi(labelText);
-                        }
-                    }
+                // Get the price if the item hasn't been purchased yet
+                int price = -1;
+                for (auto child : CCArrayExt<CCNode*>(icon->getChildren())) {
+                    CCLabelBMFont* label = typeinfo_cast<CCLabelBMFont*>(child);
+                    if (!label) continue;
 
-                    log::debug("Found item {} with price {} and unlock type {}", originalIndex, price, unlockType);
-                    m_fields->m_shopItems.push_back(std::make_tuple(originalIndex++, item, price, unlockType));
+                    std::string labelText = label->getString();
+                    labelText.erase(std::remove(labelText.begin(), labelText.end(), ','), labelText.end());
+                    price = std::stoi(labelText);
                 }
+
+                log::debug("Found item {} with price {} and unlock type {}", originalIndex, price, unlockType);
+                m_fields->m_shopItems.push_back(std::make_tuple(originalIndex++, item, price, unlockType));
             }
         }
 
