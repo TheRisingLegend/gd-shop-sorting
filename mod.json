@@ -11,11 +11,12 @@
 	"version": "v1.0.1",
 	"developer": "TheRisingLegend",
 	"description": "Adds sorting options to the shops",
-	"repository": "https://github.com/TheRisingLegend/gd-shop-sorting",
-	"dependencies": {
-		"geode.node-ids": {
-			"version": ">=v1.20.1",
-			"importance": "required"
-		}
+	"links": {
+		"source": "https://github.com/TheRisingLegend/gd-shop-sorting"
+	},
+	"resources": {
+		"sprites": [
+			"preview.PNG"
+		]
 	}
 }

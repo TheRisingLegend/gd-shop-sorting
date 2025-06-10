@@ -12,8 +12,8 @@ using namespace geode::prelude;
 class $modify(SortingShopLayer, GJShopLayer) {
     struct Fields {
         /* static */ int m_sortType;
-        std::vector<std::tuple<int, CCMenuItemSpriteExtra*, int, int>> m_shopItems;  // (original index, item, price, unlock type)
-        std::vector<cocos2d::CCMenu*> m_pages;
+        std::vector<std::tuple<int, CCMenuItemSpriteExtra*, int, int, bool>> m_shopItems;  // (original index, item, price, unlock type, is owned)
+        ListButtonBar* m_container;
     };
 
     void sortShopItems() {
@@ -23,70 +23,23 @@ class $modify(SortingShopLayer, GJShopLayer) {
         });
 
         if (m_fields->m_sortType == 1) {  // Price: Increasing
-
-            // only sort items that have not been purchased yet
-            std::vector<std::tuple<int, CCMenuItemSpriteExtra*, int, int>> temp;
-            for (const auto& item : m_fields->m_shopItems)
-                if (std::get<2>(item) != -1)
-                    temp.push_back(item);
-
-            std::sort(temp.begin(), temp.end(), [](const auto& a, const auto& b) {
-                return std::get<2>(a) < std::get<2>(b);
+            std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [](const auto& a, const auto& b) {
+                bool aOwned = std::get<4>(a);
+                bool bOwned = std::get<4>(b);
+                return aOwned == bOwned ? std::get<2>(a) < std::get<2>(b) : aOwned < bOwned;
             });
-
-            // append the remaining items so they can be displayed at the end
-            for (const auto& item : m_fields->m_shopItems)
-                if (std::get<2>(item) == -1)
-                    temp.push_back(item);
-
-            m_fields->m_shopItems = std::move(temp);
-
         } else if (m_fields->m_sortType == 2) {  // Price: Decreasing
-
-            // only sort items that have not been purchased yet
-            std::vector<std::tuple<int, CCMenuItemSpriteExtra*, int, int>> temp;
-            for (const auto& item : m_fields->m_shopItems)
-                if (std::get<2>(item) != -1)
-                    temp.push_back(item);
-
-            std::sort(temp.begin(), temp.end(), [](const auto& a, const auto& b) {
-                return std::get<2>(a) > std::get<2>(b);
+            std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [](const auto& a, const auto& b) {
+                bool aOwned = std::get<4>(a);
+                bool bOwned = std::get<4>(b);
+                return aOwned == bOwned ? std::get<2>(a) > std::get<2>(b) : aOwned < bOwned;
             });
-
-            // append the remaining items so they can be displayed at the end
-            for (const auto& item : m_fields->m_shopItems)
-                if (std::get<2>(item) == -1)
-                    temp.push_back(item);
-
-            m_fields->m_shopItems = std::move(temp);
-        }
-
-        else if (m_fields->m_sortType == 3) {  // Type
-
-            // separate already purchased items from not yet purchased items
-            std::vector<std::tuple<int, CCMenuItemSpriteExtra*, int, int>> owned;
-            std::vector<std::tuple<int, CCMenuItemSpriteExtra*, int, int>> notOwned;
-
-            for (const auto& item : m_fields->m_shopItems) {
-                if (std::get<2>(item) == -1) {
-                    owned.push_back(item);
-                } else {
-                    notOwned.push_back(item);
-                }
-            }
-
-            std::sort(owned.begin(), owned.end(), [this](const auto& a, const auto& b) {
-                return unlockTypeToTypeId(std::get<3>(a)) < unlockTypeToTypeId(std::get<3>(b));
+        } else if (m_fields->m_sortType == 3) {  // Type
+            std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [this](const auto& a, const auto& b) {
+                bool aOwned = std::get<4>(a);
+                bool bOwned = std::get<4>(b);
+                return aOwned == bOwned ? unlockTypeToTypeId(std::get<3>(a)) < unlockTypeToTypeId(std::get<3>(b)) : aOwned < bOwned;
             });
-
-            std::sort(notOwned.begin(), notOwned.end(), [this](const auto& a, const auto& b) {
-                return unlockTypeToTypeId(std::get<3>(a)) < unlockTypeToTypeId(std::get<3>(b));
-            });
-
-            // combine the two lists, all the not yet purchased items first
-            m_fields->m_shopItems.clear();
-            m_fields->m_shopItems.insert(m_fields->m_shopItems.end(), notOwned.begin(), notOwned.end());
-            m_fields->m_shopItems.insert(m_fields->m_shopItems.end(), owned.begin(), owned.end());
         }
 
         populateShop();
@@ -132,14 +85,19 @@ class $modify(SortingShopLayer, GJShopLayer) {
 
     // Adds sorted items to the shop
     void populateShop() {
-        for (auto& page : m_fields->m_pages) {
-            page->removeAllChildren();
+        std::vector<CCMenu*> menus;
+        for (auto page : CCArrayExt<ListButtonPage*>(m_fields->m_container->m_pages)) {
+            auto menu = static_cast<CCMenu*>(page->getChildren()->objectAtIndex(0));
+            if (menu) {
+                menus.push_back(menu);
+                menu->removeAllChildren();
+            }
         }
 
         for (int i = 0; i < m_fields->m_shopItems.size(); i++) {
             CCMenuItemSpriteExtra* item = std::get<1>(m_fields->m_shopItems[i]);
-            item->setPosition({-127.5f + (i % 4) * 85, -29.5f - ((i % 8) / 4) * 75});
-            m_fields->m_pages[i / 8]->addChild(item);
+            item->setPosition({-127.5f + (i % 4) * 85, -29.5f - static_cast<int>((i % 8) / 4) * 75});
+            menus[i / 8]->addChild(item);
         }
     }
 
@@ -156,58 +114,22 @@ class $modify(SortingShopLayer, GJShopLayer) {
         }
     }
 
-    // Set some common IDs
-    void addIDs() {
-        auto children = this->getChildren();
-        for (auto child : CCArrayExt<CCNode*>(children)) {
-            if (auto bar = typeinfo_cast<ListButtonBar*>(child)) {
-                bar->setID("shop-container");
-                break;
-            }
-        }
-        ListButtonBar* container = static_cast<ListButtonBar*>(this->getChildByID("shop-container"));
-        container->m_scrollLayer->m_extendedLayer->setID("shop-page-container");
-    }
-
     bool init(ShopType p0) {
         if (!GJShopLayer::init(p0)) return false;
 
-        addIDs();
-
         // Extract all items from the shop
         // This mess is to traverse the node tree
-        auto pages_temp = this->getChildByIDRecursive("shop-page-container")->getChildren();  // ListButtonPage
-        int originalIndex = 0;                                                                // to be able to sort back to default order
-        for (auto t_page : CCArrayExt<CCNode*>(pages_temp)) {
-            ListButtonPage* page = typeinfo_cast<ListButtonPage*>(t_page);
-            if (!page) continue;
+        m_fields->m_container = getChildByType<ListButtonBar>(0);
+        if (!m_fields->m_container) return true;
 
-            cocos2d::CCMenu* ccmenu = typeinfo_cast<cocos2d::CCMenu*>(page->getChildren()->objectAtIndex(0));
-            if (!ccmenu) continue;
-            m_fields->m_pages.push_back(ccmenu);
+        auto GSM = GameStatsManager::sharedState();
+        for (int i = 0; i < GSM->m_storeItemArray->count(); i++) {
+            auto storeItem = static_cast<GJStoreItem*>(GSM->m_storeItemArray->objectAtIndex(i));
+            if (storeItem->m_shopType != p0) continue;
 
-            auto pageItems = ccmenu->getChildren();
-            for (auto t_item : CCArrayExt<CCNode*>(pageItems)) {
-                // Get the item type
-                CCMenuItemSpriteExtra* item = typeinfo_cast<CCMenuItemSpriteExtra*>(t_item);
-                if (!item) continue;
-                GJItemIcon* icon = typeinfo_cast<GJItemIcon*>(item->getChildren()->objectAtIndex(0));  // this should be fine, can't think of any reason anyone would add another child here
-                int unlockType = static_cast<int>(icon->m_unlockType);
+            CCMenuItemSpriteExtra* item = static_cast<CCMenuItemSpriteExtra*>(m_shopItems->objectForKey(storeItem->m_index));
 
-                // Get the price if the item hasn't been purchased yet
-                int price = -1;
-                for (auto child : CCArrayExt<CCNode*>(icon->getChildren())) {
-                    CCLabelBMFont* label = typeinfo_cast<CCLabelBMFont*>(child);
-                    if (!label) continue;
-
-                    std::string labelText = label->getString();
-                    labelText.erase(std::remove(labelText.begin(), labelText.end(), ','), labelText.end());
-                    price = std::stoi(labelText);
-                }
-
-                log::debug("Found item {} with price {} and unlock type {}", originalIndex, price, unlockType);
-                m_fields->m_shopItems.push_back(std::make_tuple(originalIndex++, item, price, unlockType));
-            }
+            m_fields->m_shopItems.push_back(std::make_tuple(i, item, storeItem->m_price, storeItem->m_unlockType, GSM->isStoreItemUnlocked(storeItem->m_index)));
         }
 
         sortShopItems();
