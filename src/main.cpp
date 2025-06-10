@@ -7,38 +7,38 @@
 
 using namespace geode::prelude;
 
-// int $modify(SortingShopLayer, GJShopLayer)::Fields::m_sortType = 0;
-
 class $modify(SortingShopLayer, GJShopLayer) {
     struct Fields {
-        /* static */ int m_sortType;
+        int m_sortType;
+        bool m_pushOwnedToEnd;
         std::vector<std::tuple<int, CCMenuItemSpriteExtra*, int, int, bool>> m_shopItems;  // (original index, item, price, unlock type, is owned)
         ListButtonBar* m_container;
     };
 
     void sortShopItems() {
         // always sort to default first to ensure consistent ordering for other sorting methods
+        log::debug("Pushing owned items to end: {}", m_fields->m_pushOwnedToEnd);
         std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [](const auto& a, const auto& b) {
             return std::get<0>(a) < std::get<0>(b);
         });
 
         if (m_fields->m_sortType == 1) {  // Price: Increasing
-            std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [](const auto& a, const auto& b) {
+            std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [this](const auto& a, const auto& b) {
                 bool aOwned = std::get<4>(a);
                 bool bOwned = std::get<4>(b);
-                return aOwned == bOwned ? std::get<2>(a) < std::get<2>(b) : aOwned < bOwned;
+                return (m_fields->m_pushOwnedToEnd && aOwned != bOwned) ? aOwned < bOwned : std::get<2>(a) < std::get<2>(b);
             });
         } else if (m_fields->m_sortType == 2) {  // Price: Decreasing
-            std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [](const auto& a, const auto& b) {
+            std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [this](const auto& a, const auto& b) {
                 bool aOwned = std::get<4>(a);
                 bool bOwned = std::get<4>(b);
-                return aOwned == bOwned ? std::get<2>(a) > std::get<2>(b) : aOwned < bOwned;
+                return (m_fields->m_pushOwnedToEnd && aOwned != bOwned) ? aOwned < bOwned : std::get<2>(a) > std::get<2>(b);
             });
         } else if (m_fields->m_sortType == 3) {  // Type
             std::sort(m_fields->m_shopItems.begin(), m_fields->m_shopItems.end(), [this](const auto& a, const auto& b) {
                 bool aOwned = std::get<4>(a);
                 bool bOwned = std::get<4>(b);
-                return aOwned == bOwned ? unlockTypeToTypeId(std::get<3>(a)) < unlockTypeToTypeId(std::get<3>(b)) : aOwned < bOwned;
+                return (m_fields->m_pushOwnedToEnd && aOwned != bOwned) ? aOwned < bOwned : unlockTypeToTypeId(std::get<3>(a)) < unlockTypeToTypeId(std::get<3>(b));
             });
         }
 
@@ -78,8 +78,8 @@ class $modify(SortingShopLayer, GJShopLayer) {
                 return 13;
             case 12:  // Special
                 return 14;
-            default:
-                return 15;  // Unknown
+            default:  // Unknown
+                return 15;
         }
     }
 
@@ -102,7 +102,7 @@ class $modify(SortingShopLayer, GJShopLayer) {
     }
 
     void onSortButton(CCObject* sender) {
-        auto popup = SortOptionsPopup::create(&m_fields->m_sortType, [this]() {
+        auto popup = SortOptionsPopup::create(&m_fields->m_sortType, &m_fields->m_pushOwnedToEnd, [this]() {
             this->sortShopItems();
         });
         if (popup) {
@@ -116,6 +116,8 @@ class $modify(SortingShopLayer, GJShopLayer) {
 
     bool init(ShopType p0) {
         if (!GJShopLayer::init(p0)) return false;
+
+        m_fields->m_pushOwnedToEnd = true;
 
         // Extract all items from the shop
         // This mess is to traverse the node tree
